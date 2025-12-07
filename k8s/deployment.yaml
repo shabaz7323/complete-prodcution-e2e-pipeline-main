@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: complete-pipeline
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: complete-pipeline
+  template:
+    metadata:
+      labels:
+        app: complete-pipeline
+    spec:
+      containers:
+      - name: pipeline-app
+        image: shabaz7323/complete-prodcution-e2e-pipeline:1.0.0
+        ports:
+        - containerPort: 8080
