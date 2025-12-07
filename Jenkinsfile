@@ -17,7 +17,7 @@ pipeline {
 
         stage('Checkout Code') {
             steps {
-                git branch: 'main',
+                git branch: 'master',
                     url: 'https://github.com/shabaz7323/complete-prodcution-e2e-pipeline-main.git'
             }
         }
