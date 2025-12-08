@@ -1,71 +1,47 @@
 pipeline {
+
     agent {
         kubernetes {
             yaml """
 apiVersion: v1
 kind: Pod
-metadata:
-  labels:
-    app: jenkins-agent
 spec:
-  serviceAccountName: jenkins
-
   containers:
-  - name: docker
-    image: docker:26-dind
-    securityContext:
-      privileged: true
-    env:
-    - name: DOCKER_TLS_CERTDIR
-      value: ""
-    command: ["dockerd-entrypoint.sh"]
-    args:
-    - --host=tcp://0.0.0.0:2375
-    - --tls=false
-    volumeMounts:
-    - name: docker-storage
-      mountPath: /var/lib/docker
+    - name: maven
+      image: maven:3.9.6-eclipse-temurin-17
+      command: ['cat']
+      tty: true
 
-  - name: docker-cli
-    image: docker:26-cli
-    env:
-    - name: DOCKER_HOST
-      value: tcp://localhost:2375
-    - name: DOCKER_TLS_CERTDIR
-      value: ""
-    command: ["cat"]
-    tty: true
+    - name: docker
+      image: docker:26.1-dind
+      securityContext:
+        privileged: true
+      env:
+        - name: DOCKER_TLS_CERTDIR
+          value: ""
 
-  - name: maven
-    image: maven:3.9.8-eclipse-temurin-17
-    command: ["cat"]
-    tty: true
+    - name: docker-cli
+      image: docker:26.1-cli
+      command: ['cat']
+      tty: true
 
-  - name: kubectl
-    image: alpine/k8s:1.30.0
-    command: ["sh", "-c", "cat"]
-    tty: true
+    - name: kubectl
+      image: bitnami/kubectl:latest
+      command: ['cat']
+      tty: true
 
   volumes:
-  - name: docker-storage
-    emptyDir: {}
+    - name: dockersock
+      emptyDir: {}
 """
         }
     }
 
-    tools {
-        jdk 'Java17'
-        maven 'Maven3'
-    }
-
     environment {
-        APP_NAME       = "complete-prodcution-e2e-pipeline"
-        RELEASE        = "1.0.0"
-        DOCKER_USER    = "shabaz7323"
-        IMAGE_NAME     = "${DOCKER_USER}/${APP_NAME}"
-
-        // SONAR TOKEN STORED IN JENKINS CREDENTIALS
-        SONAR_AUTH_TOKEN = credentials('sonar-token')
+        APP_NAME    = "complete-pipeline"
+        RELEASE     = "1.0.0"
+        DOCKER_USER = "shabaz7323"
+        IMAGE_NAME  = "${DOCKER_USER}/${APP_NAME}"
     }
 
     stages {
@@ -77,7 +53,7 @@ spec:
             }
         }
 
-        stage('Build with Maven') {
+        stage('Build Maven Project') {
             steps {
                 container('maven') {
                     sh 'mvn clean package -DskipTests'
@@ -89,13 +65,7 @@ spec:
             steps {
                 container('maven') {
                     withSonarQubeEnv('SonarQube') {
-                        sh """
-                            mvn clean verify sonar:sonar \
-                                -Dsonar.projectKey=complete-pipeline \
-                                -Dsonar.projectName=complete-pipeline \
-                                -Dsonar.host.url=http://sonar-sonarqube:9000 \
-                                -Dsonar.login=$SONAR_AUTH_TOKEN
-                        """
+                        sh 'mvn clean verify sonar:sonar'
                     }
                 }
             }
@@ -104,8 +74,13 @@ spec:
         stage('SonarQube Quality Gate') {
             steps {
                 script {
-                    timeout(time: 2, unit: 'MINUTES') {
-                        waitForQualityGate abortPipeline: true
+                    timeout(time: 10, unit: 'MINUTES') {
+                        def result = waitForQualityGate()
+                        if (result.status != 'OK') {
+                            error "❌ SonarQube Quality Gate FAILED: ${result.status}"
+                        } else {
+                            echo "✅ Quality Gate PASSED: ${result.status}"
+                        }
                     }
                 }
             }
@@ -115,7 +90,7 @@ spec:
             steps {
                 container('docker-cli') {
                     sh """
-                        docker build -t ${IMAGE_NAME}:${RELEASE} .
+                        docker -H tcp://localhost:2375 build -t ${IMAGE_NAME}:${RELEASE} .
                     """
                 }
             }
@@ -129,7 +104,7 @@ spec:
                         usernameVariable: 'USERNAME',
                         passwordVariable: 'PASSWORD'
                     )]) {
-                        sh 'echo $PASSWORD | docker login -u $USERNAME --password-stdin'
+                        sh 'echo $PASSWORD | docker -H tcp://localhost:2375 login -u $USERNAME --password-stdin'
                     }
                 }
             }
@@ -138,7 +113,7 @@ spec:
         stage('Push Docker Image') {
             steps {
                 container('docker-cli') {
-                    sh "docker push ${IMAGE_NAME}:${RELEASE}"
+                    sh "docker -H tcp://localhost:2375 push ${IMAGE_NAME}:${RELEASE}"
                 }
             }
         }
@@ -157,10 +132,10 @@ spec:
 
     post {
         success {
-            echo "🎉 Pipeline SUCCESS — Build, Sonar, Docker Push, and Kubernetes Deploy all completed!"
+            echo "✨ Pipeline completed successfully!"
         }
         failure {
-            echo "❌ Pipeline FAILED — Check logs."
+            echo "❌ Pipeline failed — check logs."
         }
     }
 }
