@@ -13,23 +13,28 @@ spec:
     image: docker:26-dind
     securityContext:
       privileged: true
+    env:
+    - name: DOCKER_TLS_CERTDIR
+      value: ""
     command:
     - dockerd-entrypoint.sh
     args:
     - --host=tcp://0.0.0.0:2375
-    - --host=unix:///var/run/docker.sock
+    - --tls=false
     volumeMounts:
-    - name: docker-graph-storage
+    - name: docker-storage
       mountPath: /var/lib/docker
 
   - name: docker-cli
     image: docker:26-cli
-    command:
-    - cat
-    tty: true
     env:
     - name: DOCKER_HOST
       value: tcp://localhost:2375
+    - name: DOCKER_TLS_CERTDIR
+      value: ""
+    command:
+    - cat
+    tty: true
 
   - name: kubectl
     image: bitnami/kubectl:latest
@@ -38,7 +43,7 @@ spec:
     tty: true
 
   volumes:
-  - name: docker-graph-storage
+  - name: docker-storage
     emptyDir: {}
 """
         }
@@ -65,17 +70,16 @@ spec:
             }
         }
 
-        stage('Build Maven Project') {
-            steps {
-                sh 'mvn clean package -DskipTests'
-            }
-        }
+        
 
         stage('Build Docker Image') {
             steps {
                 container('docker-cli') {
                     sh """
+                        echo "--- DOCKER VERSION ---"
                         docker version
+
+                        echo "--- BUILDING IMAGE ---"
                         docker build -t ${IMAGE_NAME}:${RELEASE} .
                     """
                 }
