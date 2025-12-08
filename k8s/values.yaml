@@ -1,0 +1,11 @@
+controller:
+  persistence:
+    storageClass: "local-path"
+    size: 10Gi
+  resources:
+    limits:
+      cpu: "2"
+      memory: "4Gi"
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
