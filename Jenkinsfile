@@ -6,7 +6,7 @@ apiVersion: v1
 kind: Pod
 metadata:
   labels:
-    app: jenkins-docker-agent
+    app: jenkins-agent
 spec:
   serviceAccountName: jenkins
 
@@ -18,8 +18,7 @@ spec:
     env:
     - name: DOCKER_TLS_CERTDIR
       value: ""
-    command:
-    - dockerd-entrypoint.sh
+    command: ["dockerd-entrypoint.sh"]
     args:
     - --host=tcp://0.0.0.0:2375
     - --tls=false
@@ -34,22 +33,17 @@ spec:
       value: tcp://localhost:2375
     - name: DOCKER_TLS_CERTDIR
       value: ""
-    command:
-    - cat
+    command: ["cat"]
     tty: true
 
   - name: maven
     image: maven:3.9.8-eclipse-temurin-17
-    command:
-    - cat
+    command: ["cat"]
     tty: true
 
   - name: kubectl
     image: alpine/k8s:1.30.0
-    command:
-    - sh
-    - -c
-    - cat
+    command: ["sh", "-c", "cat"]
     tty: true
 
   volumes:
@@ -59,18 +53,19 @@ spec:
         }
     }
 
-    environment {
-        APP_NAME    = "complete-prodcution-e2e-pipeline"
-        RELEASE     = "1.0.0"
-        DOCKER_USER = "shabaz7323"
-        IMAGE_NAME  = "${DOCKER_USER}/${APP_NAME}"
-
-        SONAR_AUTH_TOKEN = credentials('sonar-token')
-    }
-
     tools {
         jdk 'Java17'
         maven 'Maven3'
+    }
+
+    environment {
+        APP_NAME       = "complete-prodcution-e2e-pipeline"
+        RELEASE        = "1.0.0"
+        DOCKER_USER    = "shabaz7323"
+        IMAGE_NAME     = "${DOCKER_USER}/${APP_NAME}"
+
+        // SONAR TOKEN STORED IN JENKINS CREDENTIALS
+        SONAR_AUTH_TOKEN = credentials('sonar-token')
     }
 
     stages {
@@ -82,7 +77,13 @@ spec:
             }
         }
 
-       
+        stage('Build with Maven') {
+            steps {
+                container('maven') {
+                    sh 'mvn clean package -DskipTests'
+                }
+            }
+        }
 
         stage('SonarQube Analysis') {
             steps {
@@ -103,7 +104,7 @@ spec:
         stage('SonarQube Quality Gate') {
             steps {
                 script {
-                    timeout(time: 3, unit: 'MINUTES') {
+                    timeout(time: 2, unit: 'MINUTES') {
                         waitForQualityGate abortPipeline: true
                     }
                 }
@@ -156,10 +157,10 @@ spec:
 
     post {
         success {
-            echo "✨ Pipeline completed successfully with SonarQube + Docker + Kubernetes!"
+            echo "🎉 Pipeline SUCCESS — Build, Sonar, Docker Push, and Kubernetes Deploy all completed!"
         }
         failure {
-            echo "❌ Pipeline failed. Check logs."
+            echo "❌ Pipeline FAILED — Check logs."
         }
     }
 }
