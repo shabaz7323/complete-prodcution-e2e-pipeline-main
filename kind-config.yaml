@@ -1,0 +1,23 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            system-reserved: "memory=1Gi"
+    extraMounts:
+      - hostPath: /var/lib/kind
+        containerPath: /var/lib/kind
+    extraPortMappings:
+      - containerPort: 30000
+        hostPort: 30000
+    extraConfig:
+      kubeletConfig:
+        cpuManagerPolicy: static
+# Increase resources
+    extraMounts:
+    - hostPath: /dev/shm
+      containerPath: /dev/shm

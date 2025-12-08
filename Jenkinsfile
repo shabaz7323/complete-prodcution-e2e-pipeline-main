@@ -9,6 +9,7 @@ metadata:
     app: jenkins-docker-agent
 spec:
   serviceAccountName: jenkins
+
   containers:
   - name: docker
     image: docker:26-dind
@@ -37,6 +38,12 @@ spec:
     - cat
     tty: true
 
+  - name: maven
+    image: maven:3.9.8-eclipse-temurin-17
+    command:
+    - cat
+    tty: true
+
   - name: kubectl
     image: alpine/k8s:1.30.0
     command:
@@ -52,16 +59,18 @@ spec:
         }
     }
 
-    tools {
-        jdk 'Java17'
-        maven 'Maven3'
-    }
-
     environment {
         APP_NAME    = "complete-prodcution-e2e-pipeline"
         RELEASE     = "1.0.0"
         DOCKER_USER = "shabaz7323"
         IMAGE_NAME  = "${DOCKER_USER}/${APP_NAME}"
+
+        SONAR_AUTH_TOKEN = credentials('sonar-token')
+    }
+
+    tools {
+        jdk 'Java17'
+        maven 'Maven3'
     }
 
     stages {
@@ -73,13 +82,38 @@ spec:
             }
         }
 
-        
+       
+
+        stage('SonarQube Analysis') {
+            steps {
+                container('maven') {
+                    withSonarQubeEnv('SonarQube') {
+                        sh """
+                            mvn clean verify sonar:sonar \
+                                -Dsonar.projectKey=complete-pipeline \
+                                -Dsonar.projectName=complete-pipeline \
+                                -Dsonar.host.url=http://sonar-sonarqube:9000 \
+                                -Dsonar.login=$SONAR_AUTH_TOKEN
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('SonarQube Quality Gate') {
+            steps {
+                script {
+                    timeout(time: 3, unit: 'MINUTES') {
+                        waitForQualityGate abortPipeline: true
+                    }
+                }
+            }
+        }
 
         stage('Build Docker Image') {
             steps {
                 container('docker-cli') {
                     sh """
-                        docker version
                         docker build -t ${IMAGE_NAME}:${RELEASE} .
                     """
                 }
@@ -112,10 +146,7 @@ spec:
             steps {
                 container('kubectl') {
                     sh """
-                        echo '--- APPLYING DEPLOYMENT ---'
                         kubectl apply -f k8s/deployment.yaml
-
-                        echo '--- APPLYING SERVICE ---'
                         kubectl apply -f k8s/service.yaml
                     """
                 }
@@ -125,7 +156,7 @@ spec:
 
     post {
         success {
-            echo "✨ Pipeline completed successfully!"
+            echo "✨ Pipeline completed successfully with SonarQube + Docker + Kubernetes!"
         }
         failure {
             echo "❌ Pipeline failed. Check logs."
