@@ -10,7 +10,7 @@ metadata:
 spec:
   containers:
   - name: docker
-    image: docker:27.0.0-dind
+    image: docker:26-dind
     securityContext:
       privileged: true
     command:
@@ -23,7 +23,7 @@ spec:
       mountPath: /var/lib/docker
 
   - name: docker-cli
-    image: docker:27.0.0-cli
+    image: docker:26-cli
     command:
     - cat
     tty: true
