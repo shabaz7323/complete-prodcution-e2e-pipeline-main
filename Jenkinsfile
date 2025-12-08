@@ -37,7 +37,7 @@ spec:
     tty: true
 
   - name: kubectl
-    image: lachlanevenson/k8s-kubectl:v1.30.0
+    image: bitnami/kubectl:1.30
     command:
     - sh
     - -c
@@ -73,7 +73,6 @@ spec:
         }
 
        
-
         stage('Build Docker Image') {
             steps {
                 container('docker-cli') {
@@ -116,7 +115,7 @@ spec:
                     sh """
                         echo "--- APPLYING DEPLOYMENT ---"
                         kubectl apply -f k8s/deployment.yaml
-
+                        
                         echo "--- APPLYING SERVICE ---"
                         kubectl apply -f k8s/service.yaml
                     """
