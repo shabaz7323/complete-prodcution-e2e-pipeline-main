@@ -37,7 +37,7 @@ spec:
     tty: true
 
   - name: kubectl
-    image: bitnami/kubectl:1.30
+    image: alpine/k8s:1.30.0
     command:
     - sh
     - -c
