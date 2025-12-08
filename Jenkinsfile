@@ -8,6 +8,7 @@ metadata:
   labels:
     app: jenkins-docker-agent
 spec:
+  serviceAccountName: jenkins
   containers:
   - name: docker
     image: docker:26-dind
@@ -72,15 +73,13 @@ spec:
             }
         }
 
-       
+        
+
         stage('Build Docker Image') {
             steps {
                 container('docker-cli') {
                     sh """
-                        echo "--- DOCKER VERSION ---"
                         docker version
-
-                        echo "--- BUILDING IMAGE ---"
                         docker build -t ${IMAGE_NAME}:${RELEASE} .
                     """
                 }
@@ -113,10 +112,10 @@ spec:
             steps {
                 container('kubectl') {
                     sh """
-                        echo "--- APPLYING DEPLOYMENT ---"
+                        echo '--- APPLYING DEPLOYMENT ---'
                         kubectl apply -f k8s/deployment.yaml
-                        
-                        echo "--- APPLYING SERVICE ---"
+
+                        echo '--- APPLYING SERVICE ---'
                         kubectl apply -f k8s/service.yaml
                     """
                 }
