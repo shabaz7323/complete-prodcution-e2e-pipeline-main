@@ -62,38 +62,41 @@ spec:
         }
 
         stage('SonarQube Analysis') {
-    steps {
-        container('maven') {
-            withSonarQubeEnv('SonarQube') {
-                sh """
-                    mvn clean verify sonar:sonar \
-                    -Dsonar.projectKey=${APP_NAME} \
-                    -Dsonar.host.url=$SONAR_HOST_URL \
-                    -Dsonar.login=$SONAR_AUTH_TOKEN
-                """
-            }
-        }
-    }
-}
-
-stage('SonarQube Quality Gate (Async)') {
-    steps {
-        script {
-            echo "⏳ Checking SonarQube Quality Gate asynchronously..."
-
-            timeout(time: 10, unit: "MINUTES") {
-                def qg = waitForQualityGate abortPipeline: false
-
-                if (qg.status != "OK") {
-                    error "❌ Quality Gate FAILED: Status = ${qg.status}"
+            steps {
+                container('maven') {
+                    withSonarQubeEnv('SonarQube') {
+                        sh """
+                            mvn clean verify sonar:sonar \
+                            -Dsonar.projectKey=${APP_NAME} \
+                            -Dsonar.host.url=$SONAR_HOST_URL \
+                            -Dsonar.login=$SONAR_AUTH_TOKEN
+                        """
+                    }
                 }
-
-                echo "✅ Quality Gate PASSED: ${qg.status}"
             }
         }
-    }
-}
 
+        stage('SonarQube Quality Gate (Webhook Async)') {
+            steps {
+                script {
+                    echo "⏳ Waiting for SonarQube webhook callback (true async)..."
+
+                    timeout(time: 10, unit: "MINUTES") {
+
+                        // The webhookSecretId MUST match the credential you added in Jenkins
+                        def qg = waitForQualityGate(
+                            webhookSecretId: 'sonar-webhook-secret'
+                        )
+
+                        if (qg.status != "OK") {
+                            error "❌ Quality Gate FAILED: ${qg.status}"
+                        }
+
+                        echo "✅ Quality Gate PASSED: ${qg.status}"
+                    }
+                }
+            }
+        }
 
         stage('Build Docker Image') {
             steps {
