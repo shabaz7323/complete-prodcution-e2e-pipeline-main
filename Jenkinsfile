@@ -62,29 +62,38 @@ spec:
         }
 
         stage('SonarQube Analysis') {
-            steps {
-                container('maven') {
-                    withSonarQubeEnv('SonarQube') {
-                        sh 'mvn clean verify sonar:sonar'
-                    }
-                }
+    steps {
+        container('maven') {
+            withSonarQubeEnv('SonarQube') {
+                sh """
+                    mvn clean verify sonar:sonar \
+                    -Dsonar.projectKey=${APP_NAME} \
+                    -Dsonar.host.url=$SONAR_HOST_URL \
+                    -Dsonar.login=$SONAR_AUTH_TOKEN
+                """
             }
         }
+    }
+}
 
-        stage('SonarQube Quality Gate') {
-            steps {
-                script {
-                    timeout(time: 10, unit: 'MINUTES') {
-                        def result = waitForQualityGate()
-                        if (result.status != 'OK') {
-                            error "❌ SonarQube Quality Gate FAILED: ${result.status}"
-                        } else {
-                            echo "✅ Quality Gate PASSED: ${result.status}"
-                        }
-                    }
+stage('SonarQube Quality Gate (Async)') {
+    steps {
+        script {
+            echo "⏳ Checking SonarQube Quality Gate asynchronously..."
+
+            timeout(time: 10, unit: "MINUTES") {
+                def qg = waitForQualityGate abortPipeline: false
+
+                if (qg.status != "OK") {
+                    error "❌ Quality Gate FAILED: Status = ${qg.status}"
                 }
+
+                echo "✅ Quality Gate PASSED: ${qg.status}"
             }
         }
+    }
+}
+
 
         stage('Build Docker Image') {
             steps {
